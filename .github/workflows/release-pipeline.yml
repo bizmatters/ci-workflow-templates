@@ -17,6 +17,11 @@ on:
         required: false
         type: string
         default: ${{ vars.TENANTS_REPO_NAME }}
+      namespace:
+        description: 'Namespace for deployments and secret refresh'
+        required: false
+        type: string
+        default: 'platform-identity'
 
 env:
   SERVICE_NAME: ${{ inputs.service_name }}
@@ -64,7 +69,7 @@ jobs:
           ./scripts/release/force-secret-refresh.sh \
             "${{ inputs.service_name }}" \
             "dev" \
-            "platform-identity"
+            "${{ inputs.namespace }}"
 
   deploy-staging:
     needs: deploy-dev
@@ -109,7 +114,7 @@ jobs:
           ./scripts/release/force-secret-refresh.sh \
             "${{ inputs.service_name }}" \
             "staging" \
-            "platform-identity"
+            "${{ inputs.namespace }}"
 
   deploy-production:
     needs: deploy-staging
@@ -154,4 +159,4 @@ jobs:
           ./scripts/release/force-secret-refresh.sh \
             "${{ inputs.service_name }}" \
             "prod" \
-            "platform-identity"
+            "${{ inputs.namespace }}"
