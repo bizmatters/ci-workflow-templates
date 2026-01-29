@@ -33,7 +33,7 @@ on:
     secrets:
       app_private_key:
         description: 'GitHub App private key for token generation'
-        required: false
+        required: true
 
 jobs:
   deploy-dev:
