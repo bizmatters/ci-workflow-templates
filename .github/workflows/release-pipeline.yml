@@ -4,10 +4,9 @@ on:
   workflow_call:
     inputs:
       service_name:
-        description: 'Service name (defaults to repository name)'
-        required: false
+        description: 'Service name'
+        required: true
         type: string
-        default: ${{ github.event.repository.name }}
       image_tag:
         description: 'Validated image tag to deploy'
         required: true
@@ -19,13 +18,23 @@ on:
         default: ${{ vars.TENANTS_REPO_NAME }}
       namespace:
         description: 'Namespace for deployments and secret refresh'
+        required: true
+        type: string
+      aws_role_arn:
+        description: 'AWS IAM Role ARN for OIDC authentication'
         required: false
         type: string
-        default: 'platform-identity'
-
-env:
-  SERVICE_NAME: ${{ inputs.service_name }}
-  TENANTS_REPO_NAME: ${{ inputs.tenants_repo_name }}
+        default: ${{ vars.AWS_ROLE_ARN }}
+      app_id:
+        description: 'GitHub App ID for token generation'
+        required: false
+        type: string
+        default: ${{ vars.APP_ID }}
+      app_private_key:
+        description: 'GitHub App private key for token generation'
+        required: false
+        type: string
+        default: ${{ secrets.APP_PRIVATE_KEY }}
 
 jobs:
   deploy-dev:
@@ -38,8 +47,8 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ inputs.app_private_key }}
           owner: bizmatters
           repositories: zerotouch-tenants
 
@@ -52,16 +61,16 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ inputs.aws_role_arn }}
           aws-region: ap-south-1
 
       - name: Deploy to Dev (Automatic)
         run: ./scripts/release/deploy-direct.sh dev
         env:
-          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          SERVICE_NAME: ${{ inputs.service_name }}
           IMAGE_TAG: ${{ inputs.image_tag }}
           BOT_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          TENANTS_REPO_NAME: ${{ env.TENANTS_REPO_NAME }}
+          TENANTS_REPO_NAME: ${{ inputs.tenants_repo_name }}
 
       - name: Force Secret Refresh (Dev)
         run: |
@@ -83,8 +92,8 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ inputs.app_private_key }}
           owner: bizmatters
           repositories: zerotouch-tenants
 
@@ -97,16 +106,16 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ inputs.aws_role_arn }}
           aws-region: ap-south-1
 
       - name: Deploy to Staging (Manual Approval Required)
         run: ./scripts/release/deploy-direct.sh staging
         env:
-          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          SERVICE_NAME: ${{ inputs.service_name }}
           IMAGE_TAG: ${{ inputs.image_tag }}
           BOT_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          TENANTS_REPO_NAME: ${{ env.TENANTS_REPO_NAME }}
+          TENANTS_REPO_NAME: ${{ inputs.tenants_repo_name }}
 
       - name: Force Secret Refresh (Staging)
         run: |
@@ -128,8 +137,8 @@ jobs:
         id: app-token
         uses: actions/create-github-app-token@v1
         with:
-          app-id: ${{ vars.APP_ID }}
-          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          app-id: ${{ inputs.app_id }}
+          private-key: ${{ inputs.app_private_key }}
           owner: bizmatters
           repositories: zerotouch-tenants
 
@@ -142,16 +151,16 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          role-to-assume: ${{ inputs.aws_role_arn }}
           aws-region: ap-south-1
 
       - name: Deploy to Production (Manual Approval Required)
         run: ./scripts/release/deploy-direct.sh production
         env:
-          SERVICE_NAME: ${{ env.SERVICE_NAME }}
+          SERVICE_NAME: ${{ inputs.service_name }}
           IMAGE_TAG: ${{ inputs.image_tag }}
           BOT_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
-          TENANTS_REPO_NAME: ${{ env.TENANTS_REPO_NAME }}
+          TENANTS_REPO_NAME: ${{ inputs.tenants_repo_name }}
 
       - name: Force Secret Refresh (Production)
         run: |
