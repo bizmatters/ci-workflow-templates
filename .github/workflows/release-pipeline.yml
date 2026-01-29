@@ -17,13 +17,6 @@ on:
         required: false
         type: string
         default: ${{ vars.TENANTS_REPO_NAME }}
-    secrets:
-      BOT_GITHUB_TOKEN:
-        description: 'GitHub token for tenant repository access'
-        required: true
-      AWS_ROLE_ARN:
-        description: 'AWS IAM Role ARN for OIDC authentication'
-        required: true
 
 env:
   SERVICE_NAME: ${{ inputs.service_name }}
@@ -36,6 +29,15 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: bizmatters
+          repositories: zerotouch-tenants
+
       - name: Checkout Platform Scripts
         uses: actions/checkout@v4
         with:
@@ -45,7 +47,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
 
       - name: Deploy to Dev (Automatic)
@@ -53,7 +55,7 @@ jobs:
         env:
           SERVICE_NAME: ${{ env.SERVICE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
-          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          BOT_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           TENANTS_REPO_NAME: ${{ env.TENANTS_REPO_NAME }}
 
       - name: Force Secret Refresh (Dev)
@@ -72,6 +74,15 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: bizmatters
+          repositories: zerotouch-tenants
+
       - name: Checkout Platform Scripts
         uses: actions/checkout@v4
         with:
@@ -81,7 +92,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
 
       - name: Deploy to Staging (Manual Approval Required)
@@ -89,7 +100,7 @@ jobs:
         env:
           SERVICE_NAME: ${{ env.SERVICE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
-          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          BOT_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           TENANTS_REPO_NAME: ${{ env.TENANTS_REPO_NAME }}
 
       - name: Force Secret Refresh (Staging)
@@ -108,6 +119,15 @@ jobs:
       id-token: write
       contents: read
     steps:
+      - name: Generate GitHub App token
+        id: app-token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ vars.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+          owner: bizmatters
+          repositories: zerotouch-tenants
+
       - name: Checkout Platform Scripts
         uses: actions/checkout@v4
         with:
@@ -117,7 +137,7 @@ jobs:
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: ap-south-1
 
       - name: Deploy to Production (Manual Approval Required)
@@ -125,7 +145,7 @@ jobs:
         env:
           SERVICE_NAME: ${{ env.SERVICE_NAME }}
           IMAGE_TAG: ${{ inputs.image_tag }}
-          BOT_GITHUB_TOKEN: ${{ secrets.BOT_GITHUB_TOKEN }}
+          BOT_GITHUB_TOKEN: ${{ steps.app-token.outputs.token }}
           TENANTS_REPO_NAME: ${{ env.TENANTS_REPO_NAME }}
 
       - name: Force Secret Refresh (Production)
