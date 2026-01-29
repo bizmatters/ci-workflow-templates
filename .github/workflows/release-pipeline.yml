@@ -30,10 +30,6 @@ on:
         required: false
         type: string
         default: ${{ vars.APP_ID }}
-    secrets:
-      app_private_key:
-        description: 'GitHub App private key for token generation'
-        required: true
 
 jobs:
   deploy-dev:
@@ -47,7 +43,7 @@ jobs:
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ inputs.app_id }}
-          private-key: ${{ secrets.app_private_key }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: bizmatters
           repositories: zerotouch-tenants
 
@@ -92,7 +88,7 @@ jobs:
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ inputs.app_id }}
-          private-key: ${{ secrets.app_private_key }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: bizmatters
           repositories: zerotouch-tenants
 
@@ -137,7 +133,7 @@ jobs:
         uses: actions/create-github-app-token@v1
         with:
           app-id: ${{ inputs.app_id }}
-          private-key: ${{ secrets.app_private_key }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
           owner: bizmatters
           repositories: zerotouch-tenants
 
