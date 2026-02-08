@@ -33,18 +33,30 @@ runs:
         sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
         sudo chmod +x /usr/local/bin/yq
     
+    - name: Determine Environment and Age Key
+      id: env
+      shell: bash
+      run: |
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          echo "env=dev" >> $GITHUB_OUTPUT
+          echo "age_key_name=SOPS_AGE_KEY_DEV" >> $GITHUB_OUTPUT
+        else
+          echo "env=pr" >> $GITHUB_OUTPUT
+          echo "age_key_name=SOPS_AGE_KEY_PR" >> $GITHUB_OUTPUT
+        fi
+    
     - name: Decrypt GitHub App Credentials
       id: decrypt-creds
       shell: bash
       env:
         SOPS_AGE_KEY: ${{ inputs.age_key }}
       run: |
-        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-          ENV="dev"
-          SECRETS_DIR="bootstrap/argocd/overlays/main/dev/secrets"
-        else
-          ENV="pr"
+        ENV="${{ steps.env.outputs.env }}"
+        
+        if [[ "$ENV" == "pr" ]]; then
           SECRETS_DIR="bootstrap/argocd/overlays/preview/secrets"
+        else
+          SECRETS_DIR="bootstrap/argocd/overlays/main/${ENV}/secrets"
         fi
         
         git clone --depth 1 https://github.com/${{ github.repository_owner }}/zerotouch-platform.git /tmp/platform
@@ -81,12 +93,13 @@ runs:
       env:
         SOPS_AGE_KEY: ${{ inputs.age_key }}
       run: |
-        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-          export ENV="dev"
-          OVERLAY_PATH="overlays/dev"
-        else
-          export ENV="pr"
+        ENV="${{ steps.env.outputs.env }}"
+        export ENV
+        
+        if [[ "$ENV" == "pr" ]]; then
           OVERLAY_PATH="overlays/pr"
+        else
+          OVERLAY_PATH="overlays/${ENV}"
         fi
         
         TENANT_DIR="$GITHUB_WORKSPACE/tenants-repo/tenants/${{ inputs.service_name }}"
