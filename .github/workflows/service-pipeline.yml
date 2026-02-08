@@ -99,7 +99,7 @@ jobs:
       - name: Decrypt Platform Secrets
         env:
           ENV: ${{ steps.age-key-name.outputs.env }}
-          SOPS_AGE_KEY: ${{ secrets[steps.age-key-name.outputs.name] }}
+          AGE_PRIVATE_KEY: ${{ secrets[steps.age-key-name.outputs.name] }}
         run: |
           cd zerotouch-platform
           ./scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh
