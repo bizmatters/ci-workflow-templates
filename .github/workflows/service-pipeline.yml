@@ -70,13 +70,9 @@ jobs:
       - name: Determine Age Key Secret Name
         id: age-key-name
         run: |
-          if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "name=SOPS_AGE_KEY_DEV" >> $GITHUB_OUTPUT
-            echo "env=dev" >> $GITHUB_OUTPUT
-          else
-            echo "name=SOPS_AGE_KEY_PR" >> $GITHUB_OUTPUT
-            echo "env=pr" >> $GITHUB_OUTPUT
-          fi
+          # Preview mode always uses PR environment
+          echo "name=SOPS_AGE_KEY_PR" >> $GITHUB_OUTPUT
+          echo "env=pr" >> $GITHUB_OUTPUT
       
       - name: Checkout Platform Repository
         uses: actions/checkout@v4
