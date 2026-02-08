@@ -112,8 +112,8 @@ runs:
         fi
         
         ENV_FILE="$GITHUB_WORKSPACE/.env"
-        > "$ENV_FILE"
         
+        # Append to existing .env (don't overwrite platform secrets)
         for secret_file in "$SECRETS_DIR"/*.secret.yaml; do
           if [[ -f "$secret_file" ]]; then
             decrypted=$(sops -d "$secret_file")
@@ -134,5 +134,3 @@ runs:
             done <<< "$keys"
           fi
         done
-        
-        cat "$ENV_FILE" >> $GITHUB_ENV

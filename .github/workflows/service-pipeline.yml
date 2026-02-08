@@ -72,9 +72,39 @@ jobs:
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
             echo "name=SOPS_AGE_KEY_DEV" >> $GITHUB_OUTPUT
+            echo "env=dev" >> $GITHUB_OUTPUT
           else
             echo "name=SOPS_AGE_KEY_PR" >> $GITHUB_OUTPUT
+            echo "env=pr" >> $GITHUB_OUTPUT
           fi
+      
+      - name: Checkout Platform Repository
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ github.repository_owner }}/zerotouch-platform
+          path: zerotouch-platform
+      
+      - name: Install SOPS and Age
+        run: |
+          AGE_VERSION=1.1.1
+          curl -Lo age.tar.gz "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz"
+          tar xf age.tar.gz
+          sudo mv age/age age/age-keygen /usr/local/bin/
+          
+          SOPS_VERSION=3.8.1
+          curl -Lo sops "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64"
+          chmod +x sops
+          sudo mv sops /usr/local/bin/
+      
+      - name: Decrypt Platform Secrets
+        env:
+          ENV: ${{ steps.age-key-name.outputs.env }}
+          SOPS_AGE_KEY: ${{ secrets[steps.age-key-name.outputs.name] }}
+        run: |
+          cd zerotouch-platform
+          ./scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh
+          mv .env ../.env
+          cd ..
       
       - name: Setup Tenant Environment
         id: setup
