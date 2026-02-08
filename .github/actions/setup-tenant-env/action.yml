@@ -1,0 +1,124 @@
+name: 'Setup Tenant Environment'
+description: 'Decrypt GitHub App credentials and tenant secrets, generate .env'
+
+inputs:
+  service_name:
+    description: 'Service name (e.g., ide-orchestrator)'
+    required: true
+  age_key:
+    description: 'Age private key for SOPS decryption'
+    required: true
+
+outputs:
+  github_token:
+    description: 'GitHub App token for tenant repo access'
+    value: ${{ steps.app-token.outputs.token }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install age and sops
+      shell: bash
+      run: |
+        AGE_VERSION=1.1.1
+        curl -Lo age.tar.gz "https://github.com/FiloSottile/age/releases/download/v${AGE_VERSION}/age-v${AGE_VERSION}-linux-amd64.tar.gz"
+        tar xf age.tar.gz
+        sudo mv age/age age/age-keygen /usr/local/bin/
+        
+        SOPS_VERSION=3.8.1
+        curl -Lo sops "https://github.com/getsops/sops/releases/download/v${SOPS_VERSION}/sops-v${SOPS_VERSION}.linux.amd64"
+        chmod +x sops
+        sudo mv sops /usr/local/bin/
+        
+        sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+        sudo chmod +x /usr/local/bin/yq
+    
+    - name: Decrypt GitHub App Credentials
+      id: decrypt-creds
+      shell: bash
+      env:
+        SOPS_AGE_KEY: ${{ inputs.age_key }}
+      run: |
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          ENV="dev"
+          SECRETS_DIR="bootstrap/argocd/overlays/main/dev/secrets"
+        else
+          ENV="pr"
+          SECRETS_DIR="bootstrap/argocd/overlays/preview/secrets"
+        fi
+        
+        git clone --depth 1 https://github.com/${{ github.repository_owner }}/zerotouch-platform.git /tmp/platform
+        cd /tmp/platform
+        
+        GIT_APP_ID=$(sops -d "${SECRETS_DIR}/git-app-id.secret.yaml" | grep "value:" | awk '{print $2}' | tr -d '"')
+        GIT_APP_INSTALLATION_ID=$(sops -d "${SECRETS_DIR}/git-app-installation-id.secret.yaml" | grep "value:" | awk '{print $2}' | tr -d '"')
+        GIT_APP_PRIVATE_KEY=$(sops -d "${SECRETS_DIR}/github-app-credentials.secret.yaml" | yq eval '.stringData.git-app-private-key' -)
+        
+        echo "app-id=$GIT_APP_ID" >> $GITHUB_OUTPUT
+        echo "installation-id=$GIT_APP_INSTALLATION_ID" >> $GITHUB_OUTPUT
+        echo "private-key<<EOF" >> $GITHUB_OUTPUT
+        echo "$GIT_APP_PRIVATE_KEY" >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+    
+    - name: Generate GitHub App Token
+      id: app-token
+      uses: actions/create-github-app-token@v1
+      with:
+        app-id: ${{ steps.decrypt-creds.outputs.app-id }}
+        private-key: ${{ steps.decrypt-creds.outputs.private-key }}
+        owner: ${{ github.repository_owner }}
+        repositories: ${{ inputs.service_name }},zerotouch-tenants
+    
+    - name: Checkout Tenant Repo
+      uses: actions/checkout@v4
+      with:
+        repository: ${{ github.repository_owner }}/zerotouch-tenants
+        token: ${{ steps.app-token.outputs.token }}
+        path: tenants-repo
+    
+    - name: Generate .env from Tenant Secrets
+      shell: bash
+      env:
+        SOPS_AGE_KEY: ${{ inputs.age_key }}
+      run: |
+        if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
+          export ENV="dev"
+          OVERLAY_PATH="overlays/dev"
+        else
+          export ENV="pr"
+          OVERLAY_PATH="overlays/pr"
+        fi
+        
+        TENANT_DIR="$GITHUB_WORKSPACE/tenants-repo/tenants/${{ inputs.service_name }}"
+        SECRETS_DIR="$TENANT_DIR/$OVERLAY_PATH/secrets"
+        
+        if [[ ! -d "$SECRETS_DIR" ]]; then
+          echo "Error: Tenant secrets not found at $SECRETS_DIR"
+          exit 1
+        fi
+        
+        ENV_FILE="$GITHUB_WORKSPACE/.env"
+        > "$ENV_FILE"
+        
+        for secret_file in "$SECRETS_DIR"/*.secret.yaml; do
+          if [[ -f "$secret_file" ]]; then
+            decrypted=$(sops -d "$secret_file")
+            secret_name=$(echo "$decrypted" | yq eval '.metadata.name' -)
+            keys=$(echo "$decrypted" | yq eval '.stringData | keys | .[]' -)
+            
+            while IFS= read -r key; do
+              [ -z "$key" ] && continue
+              value=$(echo "$decrypted" | yq eval ".stringData.\"$key\"" -)
+              
+              if [ "$key" = "value" ]; then
+                env_var_name=$(echo "$secret_name" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+              else
+                env_var_name=$(echo "${secret_name}_${key}" | tr '[:lower:]' '[:upper:]' | tr '-' '_')
+              fi
+              
+              echo "${env_var_name}=${value}" >> "$ENV_FILE"
+            done <<< "$keys"
+          fi
+        done
+        
+        cat "$ENV_FILE" >> $GITHUB_ENV

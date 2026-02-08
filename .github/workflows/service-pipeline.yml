@@ -1,0 +1,110 @@
+name: Service Pipeline
+
+on:
+  workflow_call:
+    inputs:
+      service_name:
+        description: 'Service name (e.g., ide-orchestrator)'
+        required: true
+        type: string
+      namespace:
+        description: 'Kubernetes namespace for deployment'
+        required: true
+        type: string
+      test_names:
+        description: 'JSON array of test names (e.g., ["auth", "workflow"])'
+        required: true
+        type: string
+      use_real_llm:
+        description: 'Use real LLM for tests (default: main branch only)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  id-token: write
+  contents: read
+  packages: write
+  pull-requests: write
+
+jobs:
+  # STAGE 1: BUILD
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.build.outputs.image_tag }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and Push
+        id: build
+        run: |
+          chmod +x ./scripts/ci/build.sh
+          ./scripts/ci/build.sh
+
+  # STAGE 2: TEST MATRIX
+  test:
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        test_name: ${{ fromJson(inputs.test_names) }}
+    name: test-${{ matrix.test_name }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Tenant Environment
+        id: setup
+        uses: bizmatters/ci-workflow-templates/.github/actions/setup-tenant-env@main
+        with:
+          service_name: ${{ inputs.service_name }}
+          age_key: ${{ secrets.AGE_PRIVATE_KEY }}
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Pull Test Image
+        run: docker pull ${{ needs.build.outputs.image_tag }}
+      
+      - name: Run Integration Test
+        env:
+          TEST_NAME: ${{ matrix.test_name }}
+          TEST_PATH: tests/integration/test_${{ matrix.test_name }}_integration.py
+          OVERRIDE_IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
+          USE_REAL_LLM: ${{ inputs.use_real_llm || github.ref == 'refs/heads/main' }}
+          BOT_GITHUB_TOKEN: ${{ steps.setup.outputs.github_token }}
+        run: |
+          chmod +x ./scripts/ci/in-cluster-test.sh
+          ./scripts/ci/in-cluster-test.sh
+
+  # STAGE 3: RELEASE
+  release:
+    needs: [build, test]
+    if: github.ref == 'refs/heads/main'
+    uses: bizmatters/ci-workflow-templates/.github/workflows/release-pipeline.yml@main
+    secrets: inherit
+    with:
+      service_name: ${{ inputs.service_name }}
+      image_tag: ${{ needs.build.outputs.image_tag }}
+      namespace: ${{ inputs.namespace }}
