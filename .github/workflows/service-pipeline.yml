@@ -67,15 +67,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
-      - name: Determine Environment
-        id: env
+      - name: Determine Age Key Secret Name
+        id: age-key-name
         run: |
           if [[ "${{ github.ref }}" == "refs/heads/main" ]]; then
-            echo "name=dev" >> $GITHUB_OUTPUT
-            echo "age_secret=SOPS_AGE_KEY_DEV" >> $GITHUB_OUTPUT
+            echo "name=SOPS_AGE_KEY_DEV" >> $GITHUB_OUTPUT
           else
-            echo "name=pr" >> $GITHUB_OUTPUT
-            echo "age_secret=SOPS_AGE_KEY_PR" >> $GITHUB_OUTPUT
+            echo "name=SOPS_AGE_KEY_PR" >> $GITHUB_OUTPUT
           fi
       
       - name: Setup Tenant Environment
@@ -83,7 +81,7 @@ jobs:
         uses: bizmatters/ci-workflow-templates/.github/actions/setup-tenant-env@main
         with:
           service_name: ${{ inputs.service_name }}
-          age_key: ${{ secrets[steps.env.outputs.age_secret] }}
+          age_key: ${{ secrets[steps.age-key-name.outputs.name] }}
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
