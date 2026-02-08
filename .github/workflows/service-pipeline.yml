@@ -103,8 +103,6 @@ jobs:
         run: |
           cd zerotouch-platform
           ./scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh
-          mv .env ../.env
-          cd ..
       
       - name: Setup Tenant Environment
         id: setup
