@@ -103,6 +103,10 @@ jobs:
         run: |
           cd zerotouch-platform
           ./scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh
+          # Copy .env to both locations
+          cp .env ../.env
+          echo "✓ .env created in platform directory"
+          echo "✓ .env copied to service root"
       
       - name: Setup Tenant Environment
         id: setup
