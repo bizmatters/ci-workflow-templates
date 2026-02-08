@@ -103,10 +103,8 @@ jobs:
         run: |
           cd zerotouch-platform
           ./scripts/bootstrap/infra/secrets/ksops/generate-sops/create-dot-env.sh
-          # Copy .env to both locations
-          cp .env ../.env
-          echo "✓ .env created in platform directory"
-          echo "✓ .env copied to service root"
+          mv .env ../.env
+          echo "✓ .env created at service root"
       
       - name: Setup Tenant Environment
         id: setup
@@ -135,6 +133,8 @@ jobs:
           OVERRIDE_IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
           USE_REAL_LLM: ${{ inputs.use_real_llm || github.ref == 'refs/heads/main' }}
           BOT_GITHUB_TOKEN: ${{ steps.setup.outputs.github_token }}
+          ENV: ${{ steps.age-key-name.outputs.env }}
+          AGE_PRIVATE_KEY: ${{ secrets[steps.age-key-name.outputs.name] }}
         run: |
           chmod +x ./scripts/ci/in-cluster-test.sh
           ./scripts/ci/in-cluster-test.sh
