@@ -30,7 +30,8 @@ runs:
         chmod +x sops
         sudo mv sops /usr/local/bin/
         
-        sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+        YQ_VERSION=v4.40.5
+        sudo wget -qO /usr/local/bin/yq "https://github.com/mikefarah/yq/releases/download/${YQ_VERSION}/yq_linux_amd64"
         sudo chmod +x /usr/local/bin/yq
     
     - name: Determine Environment and Age Key
