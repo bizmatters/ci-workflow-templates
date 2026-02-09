@@ -11,10 +11,6 @@ on:
         description: 'Kubernetes namespace for deployment'
         required: true
         type: string
-      test_names:
-        description: 'JSON array of test names (e.g., ["auth", "workflow"])'
-        required: true
-        type: string
       use_real_llm:
         description: 'Use real LLM for tests (default: main branch only)'
         required: false
@@ -33,9 +29,37 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       image_tag: ${{ steps.build.outputs.image_tag }}
+      test_matrix: ${{ steps.discover-tests.outputs.matrix }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      
+      - name: Discover Test Files
+        id: discover-tests
+        run: |
+          # Find all test_*.py files under tests/integration/
+          TEST_FILES=$(find tests/integration -name "test_*.py" -type f | grep -v __pycache__ | grep -v conftest | sort)
+          
+          # Build JSON array with test info
+          MATRIX_JSON="["
+          FIRST=true
+          for TEST_FILE in $TEST_FILES; do
+            # Extract test name from file path (remove tests/integration/ prefix and .py suffix)
+            TEST_NAME=$(echo "$TEST_FILE" | sed 's|tests/integration/||' | sed 's|\.py$||' | sed 's|/|_|g')
+            
+            if [ "$FIRST" = true ]; then
+              FIRST=false
+            else
+              MATRIX_JSON+=","
+            fi
+            
+            MATRIX_JSON+="{\"name\":\"$TEST_NAME\",\"path\":\"$TEST_FILE\"}"
+          done
+          MATRIX_JSON+="]"
+          
+          echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
+          echo "Discovered tests:"
+          echo "$MATRIX_JSON" | jq -r '.[] | "  - \(.name): \(.path)"'
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -61,8 +85,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        test_name: ${{ fromJson(inputs.test_names) }}
-    name: test-${{ matrix.test_name }}
+        test: ${{ fromJson(needs.build.outputs.test_matrix) }}
+    name: test-${{ matrix.test.name }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -124,8 +148,8 @@ jobs:
       
       - name: Run Integration Test
         env:
-          TEST_NAME: ${{ matrix.test_name }}
-          TEST_PATH: tests/integration/test_${{ matrix.test_name }}_integration.py
+          TEST_NAME: ${{ matrix.test.name }}
+          TEST_PATH: ${{ matrix.test.path }}
           OVERRIDE_IMAGE_TAG: ${{ needs.build.outputs.image_tag }}
           USE_REAL_LLM: ${{ inputs.use_real_llm || github.ref == 'refs/heads/main' }}
           BOT_GITHUB_TOKEN: ${{ steps.setup.outputs.github_token }}
