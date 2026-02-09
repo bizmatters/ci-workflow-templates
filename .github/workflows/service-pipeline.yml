@@ -45,7 +45,8 @@ jobs:
           FIRST=true
           for TEST_FILE in $TEST_FILES; do
             # Extract test name from file path (remove tests/integration/ prefix and .py suffix)
-            TEST_NAME=$(echo "$TEST_FILE" | sed 's|tests/integration/||' | sed 's|\.py$||' | sed 's|/|_|g')
+            # Replace / and _ with - for Kubernetes compatibility
+            TEST_NAME=$(echo "$TEST_FILE" | sed 's|tests/integration/||' | sed 's|\.py$||' | sed 's|[/_]|-|g')
             
             if [ "$FIRST" = true ]; then
               FIRST=false
