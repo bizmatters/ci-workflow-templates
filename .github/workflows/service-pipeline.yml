@@ -37,16 +37,43 @@ jobs:
       - name: Discover Test Files
         id: discover-tests
         run: |
-          # Find all test_*.py files under tests/integration/
-          TEST_FILES=$(find tests/integration -name "test_*.py" -type f | grep -v __pycache__ | grep -v conftest | sort)
+          # Read test patterns from ci/config.yaml
+          if [[ ! -f "ci/config.yaml" ]]; then
+            echo "Error: ci/config.yaml not found"
+            exit 1
+          fi
+          
+          # Get test patterns from config (supports multiple patterns)
+          PATTERNS=$(yq eval '.test.test_patterns[]' ci/config.yaml 2>/dev/null || echo "")
+          
+          if [[ -z "$PATTERNS" ]]; then
+            echo "Warning: No test patterns found in ci/config.yaml, using default"
+            PATTERNS="tests/integration/test_*.py"
+          fi
+          
+          # Find test files matching any pattern
+          TEST_FILES=""
+          while IFS= read -r pattern; do
+            # Convert glob pattern to find command
+            # Example: "tests/integration/**/*.ts" -> find tests/integration -name "*.ts"
+            DIR=$(echo "$pattern" | sed 's|/\*\*.*||')
+            NAME_PATTERN=$(echo "$pattern" | sed 's|.*/||')
+            
+            if [[ -d "$DIR" ]]; then
+              FOUND=$(find "$DIR" -name "$NAME_PATTERN" -type f | grep -v __pycache__ | grep -v conftest | sort)
+              TEST_FILES="${TEST_FILES}${FOUND}"$'\n'
+            fi
+          done <<< "$PATTERNS"
           
           # Build JSON array with test info
           MATRIX_JSON="["
           FIRST=true
-          for TEST_FILE in $TEST_FILES; do
-            # Extract test name from file path (remove tests/integration/ prefix and .py suffix)
+          while IFS= read -r TEST_FILE; do
+            [[ -z "$TEST_FILE" ]] && continue
+            
+            # Extract test name from file path (remove tests/integration/ prefix and extension)
             # Replace / and _ with - for Kubernetes compatibility
-            TEST_NAME=$(echo "$TEST_FILE" | sed 's|tests/integration/||' | sed 's|\.py$||' | sed 's|[/_]|-|g')
+            TEST_NAME=$(echo "$TEST_FILE" | sed 's|tests/integration/||' | sed 's|\.[^.]*$||' | sed 's|[/_]|-|g')
             
             if [ "$FIRST" = true ]; then
               FIRST=false
@@ -55,12 +82,12 @@ jobs:
             fi
             
             MATRIX_JSON+="{\"name\":\"$TEST_NAME\",\"path\":\"$TEST_FILE\"}"
-          done
+          done <<< "$TEST_FILES"
           MATRIX_JSON+="]"
           
           echo "matrix=$MATRIX_JSON" >> $GITHUB_OUTPUT
           echo "Discovered tests:"
-          echo "$MATRIX_JSON" | jq -r '.[] | "  - \(.name): \(.path)"'
+          echo "$MATRIX_JSON" | jq -r '.[] | "  - \(.name): \(.path)"' || echo "$MATRIX_JSON"
       
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
